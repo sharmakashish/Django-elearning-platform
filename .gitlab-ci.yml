@@ -1,0 +1,55 @@
+include:
+  - project: 'to-be-continuous/docker'
+    ref: '5.7.0'
+    file: '/templates/gitlab-ci-docker.yml'
+
+stages:
+  - build
+  - test
+  - package-build
+  - package-test
+  - publish
+  - deploy
+
+variables:
+  DOCKER_FILE: ./Dockerfile
+  DOCKER_HADOLINT_DISABLED: "true"
+  # docker-trivy job
+  DOCKER_TRIVY_ADDR: 'https://trivy.dos.tech.orange'
+  # docker-lint job
+  DOCKER_LINT_ENABLED: 'true'
+  # Publish images for dev and release branches
+  INTEG_REF: '/^(develop|release)$/'
+  PROD_REF: '/^(main|master)$/'
+  FEAT_REF: '/^(feat|fix)*$/'
+  DOCKER_BUILD_TOOL: 'kaniko'
+
+docker-trivy:
+  allow_failure: true
+
+# Publish dev/release branches automatically (+ manually for other branches if needed)
+docker-publish-integ:
+  script:
+    - echo "Building Docker image using Kaniko..."
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\",\"auth\":\"$(echo -n "$CI_REGISTRY_USER:$CI_REGISTRY_PASSWORD" | base64)\"}}}" > /kaniko/.docker/config.json
+    - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/Dockerfile --destination $CI_REGISTRY_IMAGE/snapshot:$CI_COMMIT_REF_SLUG
+    - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/Dockerfile --destination $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
+  extends: docker-publish
+  variables:
+    DOCKER_SNAPSHOT_IMAGE: '$CI_REGISTRY_IMAGE/snapshot:$CI_COMMIT_REF_SLUG'
+    DOCKER_RELEASE_IMAGE: '$CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME'
+
+test_cases:
+  stage: test
+  script:
+    - echo "Info:- Test cases will go here"
+
+deploy-to-server:
+  stage: deploy
+  script:
+    - echo "Info:- deployment will go here"
+  when: manual
+  except:
+    - master
+    - tags
+
